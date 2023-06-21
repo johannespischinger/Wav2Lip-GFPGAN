@@ -30,6 +30,8 @@ parser.add_argument('--checkpoint_path', help='Resume generator from this checkp
 
 parser.add_argument('--disc_checkpoint_path', help='Resume quality disc from this checkpoint', default=None, type=str)
 
+parser.add_argument('--freez_param', help='[Encoder,Decoder,Output,Audio, Disk]', default=[0,0,0,0,0], type=list)
+
 args = parser.parse_args()
 
 
@@ -416,6 +418,27 @@ if __name__ == "__main__":
      # Model
     model = Wav2Lip().to(device)
     disc = Wav2Lip_disc_qual().to(device)
+
+    if args.freeze_params[0] == 1:
+        for param in model.face_encoder_blocks.parameters():
+            param.requires_grad = False
+
+    if args.freeze_params[1] == 1:
+        for param in model.face_decoder_blocks.parameters():
+            param.requires_grad = False
+
+    if args.freeze_params[2] == 1:
+        for param in model.audio_encoder.parameters():
+            param.requires_grad = False
+
+    if args.freeze_params[3] == 1:
+        for param in model.output_block.parameters():
+            param.requires_grad = False
+
+    if args.freeze_params[4] == 1:
+        for param in disc.parameters():
+            param.requires_grad = False
+
 
     print('total trainable params {}'.format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
     print('total DISC trainable params {}'.format(sum(p.numel() for p in disc.parameters() if p.requires_grad)))
