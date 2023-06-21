@@ -1,3 +1,4 @@
+# Import necessary libraries
 from os.path import dirname, join, basename, isfile
 from tqdm import tqdm
 
@@ -15,17 +16,20 @@ from glob import glob
 
 import os, random, cv2, argparse
 from hparams import hparams, get_image_list
+import wandb
 
+# Login to WandB and initialize the project
+wandb.login()
+wandb.init(project='Wav2Lip', entity='jakob-jehle')
+
+# Parse command line arguments
 parser = argparse.ArgumentParser(description='Code to train the expert lip-sync discriminator')
-
 parser.add_argument("--data_root", help="Root folder of the preprocessed LRS2 dataset", required=True)
-
 parser.add_argument('--checkpoint_dir', help='Save checkpoints to this directory', required=True, type=str)
 parser.add_argument('--checkpoint_path', help='Resumed from this checkpoint', default=None, type=str)
-
 args = parser.parse_args()
 
-
+# Initialize variables
 global_step = 0
 global_epoch = 0
 use_cuda = torch.cuda.is_available()
@@ -34,6 +38,7 @@ print('use_cuda: {}'.format(use_cuda))
 syncnet_T = 5
 syncnet_mel_step_size = 16
 
+# Define the Dataset class
 class Dataset(object):
     def __init__(self, split):
         self.all_videos = get_image_list(args.data_root, split)
@@ -54,10 +59,9 @@ class Dataset(object):
         return window_fnames
 
     def crop_audio_window(self, spec, start_frame):
-        # num_frames = (T x hop_size * fps) / sample_rate
+        # Calculate the start and end indices of the audio window based on the start frame
         start_frame_num = self.get_frame_id(start_frame)
         start_idx = int(80. * (start_frame_num / float(hparams.fps)))
-
         end_idx = start_idx + syncnet_mel_step_size
 
         return spec[start_idx : end_idx, :]
@@ -68,6 +72,7 @@ class Dataset(object):
 
     def __getitem__(self, idx):
         while 1:
+            # Select a random video from the dataset
             idx = random.randint(0, len(self.all_videos) - 1)
             vidname = self.all_videos[idx]
 
@@ -79,6 +84,7 @@ class Dataset(object):
             while wrong_img_name == img_name:
                 wrong_img_name = random.choice(img_names)
 
+            # Randomly choose the target image or a wrong image
             if random.choice([True, False]):
                 y = torch.ones(1).float()
                 chosen = img_name
@@ -86,6 +92,7 @@ class Dataset(object):
                 y = torch.zeros(1).float()
                 chosen = wrong_img_name
 
+            # Get the window of consecutive frames around the chosen image
             window_fnames = self.get_window(chosen)
             if window_fnames is None:
                 continue
@@ -93,6 +100,7 @@ class Dataset(object):
             window = []
             all_read = True
             for fname in window_fnames:
+                # Read and resize each frame in the window
                 img = cv2.imread(fname)
                 if img is None:
                     all_read = False
@@ -108,19 +116,21 @@ class Dataset(object):
             if not all_read: continue
 
             try:
+                # Load the audio and extract the mel spectrogram
                 wavpath = join(vidname, "audio.wav")
                 wav = audio.load_wav(wavpath, hparams.sample_rate)
-
                 orig_mel = audio.melspectrogram(wav).T
             except Exception as e:
                 continue
 
+            # Crop the mel spectrogram to match the window size
             mel = self.crop_audio_window(orig_mel.copy(), img_name)
 
             if (mel.shape[0] != syncnet_mel_step_size):
                 continue
 
-            # H x W x 3 * T
+            # Prepare the input tensors
+            # Concatenate the window frames along the channel dimension and normalize the pixel values
             x = np.concatenate(window, axis=2) / 255.
             x = x.transpose(2, 0, 1)
             x = x[:, x.shape[1]//2:]
@@ -131,12 +141,15 @@ class Dataset(object):
             return x, mel, y
 
 logloss = nn.BCELoss()
+
+# Define the cosine loss function
 def cosine_loss(a, v, y):
     d = nn.functional.cosine_similarity(a, v)
     loss = logloss(d.unsqueeze(1), y)
 
     return loss
 
+# Training function
 def train(device, model, train_data_loader, test_data_loader, optimizer,
           checkpoint_dir=None, checkpoint_interval=None, nepochs=None):
 
@@ -152,12 +165,11 @@ def train(device, model, train_data_loader, test_data_loader, optimizer,
 
             # Transform data to CUDA device
             x = x.to(device)
-
             mel = mel.to(device)
-
             a, v = model(mel, x)
             y = y.to(device)
 
+            # Calculate loss and update model
             loss = cosine_loss(a, v, y)
             loss.backward()
             optimizer.step()
@@ -176,8 +188,11 @@ def train(device, model, train_data_loader, test_data_loader, optimizer,
 
             prog_bar.set_description('Loss: {}'.format(running_loss / (step + 1)))
 
+            wandb.log({'loss': loss}, step=global_step)
+
         global_epoch += 1
 
+# Evaluation function
 def eval_model(test_data_loader, global_step, device, model, checkpoint_dir):
     eval_steps = 1400
     print('Evaluating for {} steps'.format(eval_steps))
@@ -189,22 +204,24 @@ def eval_model(test_data_loader, global_step, device, model, checkpoint_dir):
 
             # Transform data to CUDA device
             x = x.to(device)
-
             mel = mel.to(device)
-
             a, v = model(mel, x)
             y = y.to(device)
 
+            # Calculate loss
             loss = cosine_loss(a, v, y)
             losses.append(loss.item())
 
             if step > eval_steps: break
+                        
+            wandb.log({'eval_loss': loss}, step=global_step)
 
         averaged_loss = sum(losses) / len(losses)
         print(averaged_loss)
 
         return
 
+# Save model checkpoint
 def save_checkpoint(model, optimizer, step, checkpoint_dir, epoch):
 
     checkpoint_path = join(
@@ -218,6 +235,7 @@ def save_checkpoint(model, optimizer, step, checkpoint_dir, epoch):
     }, checkpoint_path)
     print("Saved checkpoint:", checkpoint_path)
 
+# Load model checkpoint
 def _load(checkpoint_path):
     if use_cuda:
         checkpoint = torch.load(checkpoint_path)
