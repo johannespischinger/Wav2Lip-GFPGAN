@@ -419,23 +419,23 @@ if __name__ == "__main__":
     model = Wav2Lip().to(device)
     disc = Wav2Lip_disc_qual().to(device)
 
-    if args.freeze_params[0] == 1:
+    if args.freez_param[0] == 1:
         for param in model.face_encoder_blocks.parameters():
             param.requires_grad = False
 
-    if args.freeze_params[1] == 1:
+    if args.freez_param[1] == 1:
         for param in model.face_decoder_blocks.parameters():
             param.requires_grad = False
 
-    if args.freeze_params[2] == 1:
+    if args.freez_param[2] == 1:
         for param in model.audio_encoder.parameters():
             param.requires_grad = False
 
-    if args.freeze_params[3] == 1:
+    if args.freez_param[3] == 1:
         for param in model.output_block.parameters():
             param.requires_grad = False
 
-    if args.freeze_params[4] == 1:
+    if args.freez_param[4] == 1:
         for param in disc.parameters():
             param.requires_grad = False
 
