@@ -1,12 +1,15 @@
-from os import listdir, path
 import numpy as np
-import scipy, cv2, os, sys, argparse, audio
-import json, subprocess, random, string
+import cv2, os, argparse, audio
+import subprocess
 from tqdm import tqdm
-from glob import glob
 import torch, face_detection
 from models import Wav2Lip
 import platform
+
+
+
+#On local runtime you have to set this variable to True
+os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
 
 parser = argparse.ArgumentParser(description='Inference code to lip-sync videos in the wild using Wav2Lip models')
 
@@ -22,6 +25,7 @@ parser.add_argument('--outfile', type=str, help='Video path to save result. See 
 
 parser.add_argument('--static', type=bool, 
 					help='If True, then use only first video frame for inference', default=False)
+
 parser.add_argument('--fps', type=float, help='Can be specified only if input is a static image (default: 25)', 
 					default=25., required=False)
 
@@ -30,7 +34,8 @@ parser.add_argument('--pads', nargs='+', type=int, default=[0, 10, 0, 0],
 
 parser.add_argument('--face_det_batch_size', type=int, 
 					help='Batch size for face detection', default=16)
-parser.add_argument('--wav2lip_batch_size', type=int, help='Batch size for Wav2Lip model(s)', default=128)
+
+parser.add_argument('--wav2lip_batch_size', type=int, help='Batch size for Wav2Lip model(s)', default=16)
 
 parser.add_argument('--resize_factor', default=1, type=int, 
 			help='Reduce the resolution by this factor. Sometimes, best results are obtained at 480p or 720p')
@@ -223,6 +228,10 @@ def main():
 
 	wav = audio.load_wav(args.audio, 16000)
 	mel = audio.melspectrogram(wav)
+
+	# The shape of a mel spectrogram is typically expressed as (num_mel_bins, num_frames), where:
+	# num_mel_bins refers to the number of mel frequency bins or channels in the spectrogram. It represents the vertical dimension of the matrix and corresponds to the mel frequency axis.
+	# num_frames refers to the number of time frames or segments in the spectrogram. It represents the horizontal dimension of the matrix and corresponds to the time axis.
 	print(mel.shape)
 
 	if np.isnan(mel.reshape(-1)).sum() > 0:
@@ -248,6 +257,8 @@ def main():
 
 	for i, (img_batch, mel_batch, frames, coords) in enumerate(tqdm(gen, 
 											total=int(np.ceil(float(len(mel_chunks))/batch_size)))):
+
+		#print(i,img_batch, mel_batch, frames, coords)
 		if i == 0:
 			model = load_model(args.checkpoint_path)
 			print ("Model loaded")
