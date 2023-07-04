@@ -1,6 +1,7 @@
 *.pkl
 *.jpg
 *.mp4
+*.mov
 *.pth
 *.pyc
 __pycache__
