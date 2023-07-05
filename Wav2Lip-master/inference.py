@@ -148,100 +148,100 @@ class Inference:
         return model.eval()
 
     def run(self):
-        if not os.path.isfile(self.video):
-            raise ValueError('--face argument must be a valid path to video/image file')
-
-        elif self.video.split('.')[1] in ['jpg', 'png', 'jpeg']:
-            full_frames = [cv2.imread(self.video)]
-            fps = self.fps
-
-        else:
-            video_stream = cv2.VideoCapture(self.video)
-            fps = video_stream.get(cv2.CAP_PROP_FPS)
-
-            print('Reading video frames...')
-
-            full_frames = []
-            while 1:
-                still_reading, frame = video_stream.read()
-                if not still_reading:
-                    video_stream.release()
-                    break
-                if self.resize_factor > 1:
-                    frame = cv2.resize(frame,
-                                       (frame.shape[1] // self.resize_factor, frame.shape[0] // self.resize_factor))
-
-                if self.rotate:
-                    frame = cv2.rotate(frame, cv2.cv2.ROTATE_90_CLOCKWISE)
-
-                y1, y2, x1, x2 = self.crop
-                if x2 == -1: x2 = frame.shape[1]
-                if y2 == -1: y2 = frame.shape[0]
-
-                frame = frame[y1:y2, x1:x2]
-
-                full_frames.append(frame)
-
-        print("Number of frames available for inference: " + str(len(full_frames)))
-
-        if not self.audio.endswith('.wav'):
-            print('Extracting raw audio...')
-            command = 'ffmpeg -y -i {} -strict -2 {}'.format(self.audio, 'temp/temp.wav')
-
-            subprocess.call(command, shell=True)
-            self.audio = 'temp/temp.wav'
-
-        wav = audio.load_wav(self.audio, 16000)
-        mel = audio.melspectrogram(wav)
-        print(mel.shape)
-
-        if np.isnan(mel.reshape(-1)).sum() > 0:
-            raise ValueError(
-                'Mel contains nan! Using a TTS voice? Add a small epsilon noise to the wav file and try again')
-
-        mel_chunks = []
-        mel_step_size = 16
-        mel_idx_multiplier = 80. / fps
-        i = 0
-        while 1:
-            start_idx = int(i * mel_idx_multiplier)
-            if start_idx + mel_step_size > len(mel[0]):
-                mel_chunks.append(mel[:, len(mel[0]) - mel_step_size:])
-                break
-            mel_chunks.append(mel[:, start_idx: start_idx + mel_step_size])
-            i += 1
-
-        print("Length of mel chunks: {}".format(len(mel_chunks)))
-
-        full_frames = full_frames[:len(mel_chunks)]
-
-        batch_size = self.wav2lip_batch_size
-        gen = self.datagen(full_frames.copy(), mel_chunks)
-
-        for i, (img_batch, mel_batch, frames, coords) in enumerate(
-                tqdm(gen, total=int(np.ceil(float(len(mel_chunks)) / batch_size)))):
-            if i == 0:
-
-
-                frame_h, frame_w = full_frames[0].shape[:-1]
-                out = cv2.VideoWriter('temp/result.avi', cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_w, frame_h))
-
-            img_batch = torch.FloatTensor(np.transpose(img_batch, (0, 3, 1, 2))).to(self.device)
-            mel_batch = torch.FloatTensor(np.transpose(mel_batch, (0, 3, 1, 2))).to(self.device)
-
-            with torch.no_grad():
-                pred = self.model(mel_batch, img_batch)
-
-            pred = pred.cpu().numpy().transpose(0, 2, 3, 1) * 255.
-
-            for p, f, c in zip(pred, frames, coords):
-                y1, y2, x1, x2 = c
-                p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
-
-                f[y1:y2, x1:x2] = p
-                out.write(f)
-
-        out.release()
+        # if not os.path.isfile(self.video):
+        #     raise ValueError('--face argument must be a valid path to video/image file')
+        #
+        # elif self.video.split('.')[1] in ['jpg', 'png', 'jpeg']:
+        #     full_frames = [cv2.imread(self.video)]
+        #     fps = self.fps
+        #
+        # else:
+        #     video_stream = cv2.VideoCapture(self.video)
+        #     fps = video_stream.get(cv2.CAP_PROP_FPS)
+        #
+        #     print('Reading video frames...')
+        #
+        #     full_frames = []
+        #     while 1:
+        #         still_reading, frame = video_stream.read()
+        #         if not still_reading:
+        #             video_stream.release()
+        #             break
+        #         if self.resize_factor > 1:
+        #             frame = cv2.resize(frame,
+        #                                (frame.shape[1] // self.resize_factor, frame.shape[0] // self.resize_factor))
+        #
+        #         if self.rotate:
+        #             frame = cv2.rotate(frame, cv2.cv2.ROTATE_90_CLOCKWISE)
+        #
+        #         y1, y2, x1, x2 = self.crop
+        #         if x2 == -1: x2 = frame.shape[1]
+        #         if y2 == -1: y2 = frame.shape[0]
+        #
+        #         frame = frame[y1:y2, x1:x2]
+        #
+        #         full_frames.append(frame)
+        #
+        # print("Number of frames available for inference: " + str(len(full_frames)))
+        #
+        # if not self.audio.endswith('.wav'):
+        #     print('Extracting raw audio...')
+        #     command = 'ffmpeg -y -i {} -strict -2 {}'.format(self.audio, 'temp/temp.wav')
+        #
+        #     subprocess.call(command, shell=True)
+        #     self.audio = 'temp/temp.wav'
+        #
+        # wav = audio.load_wav(self.audio, 16000)
+        # mel = audio.melspectrogram(wav)
+        # print(mel.shape)
+        #
+        # if np.isnan(mel.reshape(-1)).sum() > 0:
+        #     raise ValueError(
+        #         'Mel contains nan! Using a TTS voice? Add a small epsilon noise to the wav file and try again')
+        #
+        # mel_chunks = []
+        # mel_step_size = 16
+        # mel_idx_multiplier = 80. / fps
+        # i = 0
+        # while 1:
+        #     start_idx = int(i * mel_idx_multiplier)
+        #     if start_idx + mel_step_size > len(mel[0]):
+        #         mel_chunks.append(mel[:, len(mel[0]) - mel_step_size:])
+        #         break
+        #     mel_chunks.append(mel[:, start_idx: start_idx + mel_step_size])
+        #     i += 1
+        #
+        # print("Length of mel chunks: {}".format(len(mel_chunks)))
+        #
+        # full_frames = full_frames[:len(mel_chunks)]
+        #
+        # batch_size = self.wav2lip_batch_size
+        # gen = self.datagen(full_frames.copy(), mel_chunks)
+        #
+        # for i, (img_batch, mel_batch, frames, coords) in enumerate(
+        #         tqdm(gen, total=int(np.ceil(float(len(mel_chunks)) / batch_size)))):
+        #     if i == 0:
+        #
+        #
+        #         frame_h, frame_w = full_frames[0].shape[:-1]
+        #         out = cv2.VideoWriter('temp/result.avi', cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_w, frame_h))
+        #
+        #     img_batch = torch.FloatTensor(np.transpose(img_batch, (0, 3, 1, 2))).to(self.device)
+        #     mel_batch = torch.FloatTensor(np.transpose(mel_batch, (0, 3, 1, 2))).to(self.device)
+        #
+        #     with torch.no_grad():
+        #         pred = self.model(mel_batch, img_batch)
+        #
+        #     pred = pred.cpu().numpy().transpose(0, 2, 3, 1) * 255.
+        #
+        #     for p, f, c in zip(pred, frames, coords):
+        #         y1, y2, x1, x2 = c
+        #         p = cv2.resize(p.astype(np.uint8), (x2 - x1, y2 - y1))
+        #
+        #         f[y1:y2, x1:x2] = p
+        #         out.write(f)
+        #
+        # out.release()
 
         cmd = f"ffmpeg -i 'temp/result.avi' -i {self.audio} -c:v copy -c:a aac {self.outputFile}"
         subprocess.run(cmd, shell=True)
