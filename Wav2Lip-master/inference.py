@@ -242,7 +242,7 @@ class Inference:
         #         out.write(f)
         #
         # out.release()
-
+        print(self.outputFile)
         cmd = f"ffmpeg -i 'temp/result.avi' -i {self.audio} -c:v copy -c:a aac {self.outputFile}"
         subprocess.run(cmd, shell=True)
 
