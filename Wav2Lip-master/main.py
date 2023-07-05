@@ -1,13 +1,33 @@
 import os
 import shutil
+from http.client import HTTPException
 
-from fastapi import FastAPI, File, UploadFile, Form
+from dotenv import load_dotenv
+from fastapi import FastAPI, File, UploadFile, Form, Depends
+from fastapi.security import APIKeyHeader
+
 from pydantic import BaseModel
+from starlette.status import HTTP_403_FORBIDDEN
+
 from inference import Inference
-from fastapi.responses import FileResponse
 import boto3
 
 app = FastAPI()
+
+# Define your API keys
+load_dotenv()
+API_KEYS = [os.getenv('INFERENCE_API_KEY')]
+
+# Define the API key name and location (e.g., header, query parameter, cookie)
+API_KEY_NAME = os.getenv('API_KEY_NAME')
+API_KEY_LOCATION = APIKeyHeader(name=API_KEY_NAME)
+
+
+# API key dependency
+async def verify_api_key(api_key: str = Depends(API_KEY_LOCATION)):
+    if api_key not in API_KEYS:
+        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Invalid API key")
+    return api_key
 
 
 class LipSync(BaseModel):
@@ -18,14 +38,9 @@ class LipSync(BaseModel):
 async def root():
     return {"message": "Hello sweetheart, lets upload some files to the API"}
 
-@app.get("/files/{file_path:path}")
-async def get_file(file_path: str):
-    return FileResponse(file_path)
 
-
-
-@app.post("/inference")
-async def inference(audio: UploadFile = File(...), video: UploadFile = File(...), video_name: str= Form(...)):
+@app.post("/inference", dependencies=[Depends(verify_api_key)])
+async def inference(audio: UploadFile = File(...), video: UploadFile = File(...), video_name: str = Form(...)):
     # Save the video file
     video_filename = f"inputs/{video.filename}"
     with open(video_filename, "wb") as f:
@@ -71,7 +86,7 @@ async def inference(audio: UploadFile = File(...), video: UploadFile = File(...)
         "message": "File uploaded successfully",
         "video_url": video_url
     }
-        # LipSync(video_url=video_url)
+    # LipSync(video_url=video_url)
 
     # with open(fileLocation, "wb+") as file_object:
     #     file_object.write(fileLocation)
