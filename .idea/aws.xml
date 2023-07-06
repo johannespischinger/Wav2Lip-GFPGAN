@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="accountSettings">
+    <option name="activeProfile" value="profile:johannes.pischinger" />
+    <option name="activeRegion" value="eu-central-1" />
+    <option name="recentlyUsedProfiles">
+      <list>
+        <option value="profile:johannes.pischinger" />
+        <option value="profile:SusioWebapp" />
+      </list>
+    </option>
+    <option name="recentlyUsedRegions">
+      <list>
+        <option value="eu-central-1" />
+        <option value="eu-west-1" />
+        <option value="us-east-1" />
+      </list>
+    </option>
+  </component>
+</project>

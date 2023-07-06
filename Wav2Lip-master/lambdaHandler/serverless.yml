@@ -1,0 +1,37 @@
+service: fastAPI
+frameworkVersion: '3'
+
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: eu-central-1
+  iam:
+    role:
+        statements:
+          - Effect: "Allow"
+            Action:
+                - "s3:listBucket"
+            Resource: "*"
+          - Effect: "Allow"
+            Action:
+                - "s3:putObject"
+                - "s3:getObject"
+            Resource:
+                - "arn:aws:s3:::dev.susio.videogeneration/*"
+
+
+
+
+
+functions:
+  handler:
+    handler: lambdaFunction.handler
+    events:
+      - httpApi:
+          path: /
+          method: get
+
+    layers:
+      - arn:aws:lambda:eu-central-1:736874312333:layer:requests:7
+
