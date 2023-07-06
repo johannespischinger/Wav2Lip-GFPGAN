@@ -16,3 +16,4 @@ evaluation/test_filelists/lr*.txt
 *.webm
 *.mp3
 *.env
+python
