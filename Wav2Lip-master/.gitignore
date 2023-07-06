@@ -17,3 +17,4 @@ evaluation/test_filelists/lr*.txt
 *.mp3
 *.env
 python
+*.zip
