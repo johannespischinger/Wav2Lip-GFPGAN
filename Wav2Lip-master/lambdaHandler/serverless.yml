@@ -21,17 +21,20 @@ provider:
                 - "arn:aws:s3:::dev.susio.videogeneration/*"
 
 
-
-
-
 functions:
   handler:
     handler: lambdaFunction.handler
     events:
-      - httpApi:
-          path: /
-          method: get
-
+#      - httpApi:
+#          path: /
+#          method: get
+      - s3:
+          bucket: dev.susio.videogeneration
+          event: s3:ObjectCreated:*
+          rules:
+            - prefix: audio/
+            - suffix: .wav
+          existing: true
     layers:
       - arn:aws:lambda:eu-central-1:736874312333:layer:requests:7
 

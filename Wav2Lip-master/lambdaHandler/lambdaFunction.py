@@ -22,14 +22,14 @@ def get_generate_file(audio_file: str, video_file: str, video_name: str) -> None
     """
     try:
         print(f"\nprocessing '{audio_file.split('/')[-1]}'... ")
-        url = "http://52.59.235.101/inference"
+        url = "http://127.0.0.1:8000/inference"
 
         files = [
             ("audio", (audio_file, open(audio_file, "rb"), "audio/wav")),
             ("video", (video_file, open(video_file, "rb"), "video/mp4")),
         ]
         headers = {
-            "wav2lip-API-KEY": "3ebf52c0-3ebf52c0",
+            os.environ['API_KEY_NAME']: os.environ['INFERENCE_API_KEY'],
 
         }
         data = {
