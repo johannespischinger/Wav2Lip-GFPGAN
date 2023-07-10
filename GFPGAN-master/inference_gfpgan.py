@@ -1,4 +1,6 @@
 import argparse
+import warnings
+
 import cv2
 import glob
 import numpy as np
@@ -8,151 +10,145 @@ from basicsr.utils import imwrite
 from tqdm import tqdm
 
 from gfpgan import GFPGANer
+from basicsr.archs.rrdbnet_arch import RRDBNet
+from realesrgan import RealESRGANer
 
 
-def main():
-    """Inference demo for GFPGAN (for users).
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-i',
-        '--input',
-        type=str,
-        default='inputs/whole_imgs',
-        help='Input image or folder. Default: inputs/whole_imgs')
-    parser.add_argument('-o', '--output', type=str, default='results', help='Output folder. Default: results')
-    # we use version to select models, which is more user-friendly
-    parser.add_argument(
-        '-v', '--version', type=str, default='1.3', help='GFPGAN model version. Option: 1 | 1.2 | 1.3. Default: 1.3')
-    parser.add_argument(
-        '-s', '--upscale', type=int, default=2, help='The final upsampling scale of the image. Default: 2')
+class GanInference:
+    def __init__(self, input_folder='inputs/whole_imgs', output_folder='results', version='1.3', upscale=2,
+                 bg_upsampler='realesrgan', bg_tile=400, suffix=None, only_center_face=False, aligned=False,
+                 save_faces=False, extension='auto'):
+        self.input_folder = input_folder
+        self.output_folder = output_folder
+        self.version = version
+        self.upscale = upscale
+        self.bg_upsampler = bg_upsampler
+        self.bg_tile = bg_tile
+        self.suffix = suffix
+        self.only_center_face = only_center_face
+        self.aligned = aligned
+        self.save_faces = save_faces
+        self.extension = extension
+        self.processedFramesFolderPath = os.path.join('temp', 'processedFrames')
+        self.unprocessedFramesFolderPath = os.path.join('temp', 'unprocessedFrames')
+        self.restoredFramesFolderPath = os.path.join('temp', 'restoredFrames')
 
-    parser.add_argument(
-        '--bg_upsampler', type=str, default='realesrgan', help='background upsampler. Default: realesrgan')
-    parser.add_argument(
-        '--bg_tile',
-        type=int,
-        default=400,
-        help='Tile size for background sampler, 0 for no tile during testing. Default: 400')
-    parser.add_argument('--suffix', type=str, default=None, help='Suffix of the restored faces')
-    parser.add_argument('--only_center_face', action='store_true', help='Only restore the center face')
-    parser.add_argument('--aligned', action='store_true', help='Input are aligned faces')
-    parser.add_argument('--save_faces', default=False, help='Save the restored faces')
-    parser.add_argument(
-        '--ext',
-        type=str,
-        default='auto',
-        help='Image extension. Options: auto | jpg | png, auto means using the same extension as inputs. Default: auto')
-    args = parser.parse_args()
+    def load_video(self, video_path):
+        vidcap = cv2.VideoCapture(video_path)
 
-    args = parser.parse_args()
+        # Get the total number of frames in the video
+        numberOfFrames = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    # ------------------------ input & output ------------------------
-    if args.input.endswith('/'):
-        args.input = args.input[:-1]
-    if os.path.isfile(args.input):
-        img_list = [args.input]
-    else:
-        img_list = sorted(glob.glob(os.path.join(args.input, '*')))
+        # Get the frames per second (fps) of the video
+        fps = vidcap.get(cv2.CAP_PROP_FPS)
+        print("FPS: ", fps, "Frames: ", numberOfFrames)  # Print the fps and the total number of frames
+        from tqdm import tqdm
+        # Loop over each frame in the video
+        for frameNumber in tqdm(range(numberOfFrames)):
+            # Read the next frame from the video
+            _, image = vidcap.read()
+            # Save the frame as a .jpg image in the specified folder
+            cv2.imwrite(os.path.join(self.unprocessedFramesFolderPath, str(frameNumber).zfill(4) + '.jpg'), image)
+            if numberOfFrames == 10:
+                break
 
-    os.makedirs(args.output, exist_ok=True)
-
-    # ------------------------ set up background upsampler ------------------------
-    if args.bg_upsampler == 'realesrgan':
-        if not torch.cuda.is_available():  # CPU
-            import warnings
-            warnings.warn('The unoptimized RealESRGAN is slow on CPU. We do not use it. '
-                          'If you really want to use it, please modify the corresponding codes.')
-            bg_upsampler = None
+    def run_inference(self):
+        if self.input_folder.endswith('/'):
+            self.input_folder = self.input_folder[:-1]
+        if os.path.isfile(self.input_folder):
+            img_list = [self.input_folder]
         else:
-            from basicsr.archs.rrdbnet_arch import RRDBNet
-            from realesrgan import RealESRGANer
-            model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=2)
-            bg_upsampler = RealESRGANer(
-                scale=2,
-                model_path='https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth',
-                model=model,
-                tile=args.bg_tile,
-                tile_pad=10,
-                pre_pad=0,
-                half=True)  # need to set False in CPU mode
-    else:
-        bg_upsampler = None
+            img_list = sorted(glob.glob(os.path.join(self.input_folder, '*')))
 
-    # ------------------------ set up GFPGAN restorer ------------------------
-    if args.version == '1':
-        arch = 'original'
-        channel_multiplier = 1
-        model_name = 'GFPGANv1'
-    elif args.version == '1.2':
-        arch = 'clean'
-        channel_multiplier = 2
-        model_name = 'GFPGANCleanv1-NoCE-C2'
-    elif args.version == '1.3':
-        arch = 'clean'
-        channel_multiplier = 2
-        model_name = 'GFPGANv1.3'
-    else:
-        raise ValueError(f'Wrong model version {args.version}.')
+        os.makedirs(self.output_folder, exist_ok=True)
 
-    # determine model paths
-    model_path = os.path.join('experiments/pretrained_models', model_name + '.pth')
-    if not os.path.isfile(model_path):
-        model_path = os.path.join('realesrgan/weights', model_name + '.pth')
-    if not os.path.isfile(model_path):
-        raise ValueError(f'Model {model_name} does not exist.')
-
-    restorer = GFPGANer(
-        model_path=model_path,
-        upscale=args.upscale,
-        arch=arch,
-        channel_multiplier=channel_multiplier,
-        bg_upsampler=bg_upsampler)
-
-    # ------------------------ restore ------------------------
-    for img_path in tqdm(img_list):
-        # read image
-        img_name = os.path.basename(img_path)
-        print(f'Processing {img_name} ...')
-        basename, ext = os.path.splitext(img_name)
-        input_img = cv2.imread(img_path, cv2.IMREAD_COLOR)
-
-        # restore faces and background if necessary
-        cropped_faces, restored_faces, restored_img = restorer.enhance(
-            input_img, has_aligned=args.aligned, only_center_face=args.only_center_face, paste_back=True)
-
-        # save faces
-        if(args.save_faces):
-          for idx, (cropped_face, restored_face) in enumerate(zip(cropped_faces, restored_faces)):
-              # save cropped face
-              save_crop_path = os.path.join(args.output, 'cropped_faces', f'{basename}_{idx:02d}.png')
-              imwrite(cropped_face, save_crop_path)
-              # save restored face
-              if args.suffix is not None:
-                  save_face_name = f'{basename}_{idx:02d}_{args.suffix}.png'
-              else:
-                  save_face_name = f'{basename}_{idx:02d}.png'
-              save_restore_path = os.path.join(args.output, 'restored_faces', save_face_name)
-              imwrite(restored_face, save_restore_path)
-              # save comparison image
-              cmp_img = np.concatenate((cropped_face, restored_face), axis=1)
-              imwrite(cmp_img, os.path.join(args.output, 'cmp', f'{basename}_{idx:02d}.png'))
-
-        # save restored img
-        if restored_img is not None:
-            if args.ext == 'auto':
-                extension = ext[1:]
+        if self.bg_upsampler == 'realesrgan':
+            if not torch.cuda.is_available():
+                warnings.warn('The unoptimized RealESRGAN is slow on CPU. We do not use it. '
+                              'If you really want to use it, please modify the corresponding codes.')
+                bg_upsampler = None
             else:
-                extension = args.ext
+                model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=2)
+                bg_upsampler = RealESRGANer(
+                    scale=2,
+                    model_path='https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth',
+                    model=model,
+                    tile=self.bg_tile,
+                    tile_pad=10,
+                    pre_pad=0,
+                    half=True)
+        else:
+            bg_upsampler = None
 
-            if args.suffix is not None:
-                save_restore_path = os.path.join(args.output, 'restored_imgs', f'{basename}_{args.suffix}.{extension}')
-            else:
-                save_restore_path = os.path.join(args.output, 'restored_imgs', f'{basename}.{extension}')
-            imwrite(restored_img, save_restore_path)
+        if self.version == '1':
+            arch = 'original'
+            channel_multiplier = 1
+            model_name = 'GFPGANv1'
+        elif self.version == '1.2':
+            arch = 'clean'
+            channel_multiplier = 2
+            model_name = 'GFPGANCleanv1-NoCE-C2'
+        elif self.version == '1.3':
+            arch = 'clean'
+            channel_multiplier = 2
+            model_name = 'GFPGANv1.3'
+        else:
+            raise ValueError(f'Wrong model version {self.version}.')
 
-    print(f'Results are in the [{args.output}] folder.')
+        model_path = os.path.join('experiments/pretrained_models', model_name + '.pth')
+        if not os.path.isfile(model_path):
+            model_path = os.path.join('realesrgan/weights', model_name + '.pth')
+        if not os.path.isfile(model_path):
+            raise ValueError(f'Model {model_name} does not exist.')
 
+        restorer = GFPGANer(
+            model_path=model_path,
+            upscale=self.upscale,
+            arch=arch,
+            channel_multiplier=channel_multiplier,
+            bg_upsampler=bg_upsampler)
 
-if __name__ == '__main__':
-    main()
+        for img_path in tqdm(img_list):
+            img_name = os.path.basename(img_path)
+            print(f'Processing {img_name} ...')
+            basename, ext = os.path.splitext(img_name)
+            input_img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+
+            cropped_faces, restored_faces, restored_img = restorer.enhance(
+                input_img, has_aligned=self.aligned, only_center_face=self.only_center_face, paste_back=True)
+
+            if self.save_faces:
+                for idx, (cropped_face, restored_face) in enumerate(zip(cropped_faces, restored_faces)):
+                    save_crop_path = os.path.join(self.output_folder, 'cropped_faces', f'{basename}_{idx:02d}.png')
+                    imwrite(cropped_face, save_crop_path)
+                    if self.suffix is not None:
+                        save_face_name = f'{basename}_{idx:02d}_{self.suffix}.png'
+                    else:
+                        save_face_name = f'{basename}_{idx:02d}.png'
+                    save_restore_path = os.path.join(self.output_folder, 'restored_faces', save_face_name)
+                    imwrite(restored_face, save_restore_path)
+                    cmp_img = np.concatenate((cropped_face, restored_face), axis=1)
+                    imwrite(cmp_img, os.path.join(self.output_folder, 'cmp', f'{basename}_{idx:02d}.png'))
+
+            if restored_img is not None:
+                if self.extension == 'auto':
+                    extension = ext[1:]
+                else:
+                    extension = self.extension
+
+                if self.suffix is not None:
+                    save_restore_path = os.path.join(self.output_folder, 'restored_imgs',
+                                                     f'{basename}_{self.suffix}.{extension}')
+                else:
+                    save_restore_path = os.path.join(self.output_folder, 'restored_imgs',
+                                                     f'{basename}.{extension}')
+                imwrite(restored_img, save_restore_path)
+
+        print(f'Results are in the [{self.output_folder}] folder.')
+
+# Example usage
+gan_inference = GanInference(input_folder='inputs/whole_imgs', output_folder='results', version='1.3', upscale=2,
+                             bg_upsampler='realesrgan', bg_tile=400, suffix=None, only_center_face=False,
+                             aligned=False, save_faces=False, extension='auto')
+gan_inference.load_video('results/test123.mp4')
+

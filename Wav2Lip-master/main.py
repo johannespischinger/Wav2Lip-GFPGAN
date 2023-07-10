@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from starlette.status import HTTP_403_FORBIDDEN
 
 from inference import Inference
+from ganInference import GanInference
 import boto3
 
 app = FastAPI()
@@ -63,6 +64,8 @@ async def inference(audio: UploadFile = File(...), video: UploadFile = File(...)
     output_file_path = f"results/{output_file_name}"
     inference = Inference(video=video_filename, audio=audio_filename, outputFile=output_file_path)
     output_file = inference.run()
+    gan = GanInference(videoPath=output_file, audioPath=audio_filename)
+    gan.run()
 
     # Rename the file if a file name is provided
     # if video_name:
