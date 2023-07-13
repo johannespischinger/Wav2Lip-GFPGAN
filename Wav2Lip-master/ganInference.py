@@ -1,9 +1,6 @@
-import argparse
 import warnings
-
 import cv2
 import glob
-import numpy as np
 import os
 import torch
 from basicsr.utils import imwrite
@@ -31,7 +28,20 @@ class GanInference:
         self.restoredFramesFolderPath = os.path.join(self.processedFramesFolderPath, 'restoredFrames')
         self.videoPath = videoPath
         self.audioPath = audioPath
+        os.makedirs(self.processedFramesFolderPath, exist_ok=True)
+        os.makedirs(self.unprocessedFramesFolderPath, exist_ok=True)
+        os.makedirs(self.restoredFramesFolderPath, exist_ok=True)
 
+        # Clear the frame folders
+        listFrames = os.listdir(self.unprocessedFramesFolderPath)
+        for file in listFrames:
+            if file.endswith('.jpg'):
+                os.remove(os.path.join(self.unprocessedFramesFolderPath, file))
+
+        listFrames = os.listdir(self.restoredFramesFolderPath)
+        for file in listFrames:
+            if file.endswith('.jpg'):
+                os.remove(os.path.join(self.restoredFramesFolderPath, file))
 
     def load_video(self):
         vidcap = cv2.VideoCapture(self.videoPath)
@@ -60,13 +70,13 @@ class GanInference:
         else:
             img_list = sorted(glob.glob(os.path.join(self.unprocessedFramesFolderPath, '*')))
 
-        os.makedirs(self.processedFramesFolderPath, exist_ok=True)
+
 
         if self.bg_upsampler == 'realesrgan':
             if not torch.cuda.is_available():
                 warnings.warn('The unoptimized RealESRGAN is slow on CPU. We do not use it. '
                               'If you really want to use it, please modify the corresponding codes.')
-
+                bg_upsampler = None
 
             model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=2)
             bg_upsampler = RealESRGANer(
@@ -76,7 +86,7 @@ class GanInference:
                 tile=self.bg_tile,
                 tile_pad=10,
                 pre_pad=0,
-                half=False)
+                half=True)
         else:
             bg_upsampler = None
 
@@ -199,11 +209,4 @@ class GanInference:
         self.run_inference()
         self.createFinalVideo()
 
-# # Example usage
-# gan_inference = GanInference(videoPath='inputs/test.mp4', audioPath= 'inputs/CID016_Jakob.wav',version='1.3', upscale=1,
-#                              bg_upsampler='realesrgan', bg_tile=400, suffix=None, only_center_face=False,
-#                              aligned=False, extension='auto')
-# gan_inference.load_video('results/test123.mp4')
-# gan_inference.run_inference()
-# gan_inference.createFinalVideo()
 
