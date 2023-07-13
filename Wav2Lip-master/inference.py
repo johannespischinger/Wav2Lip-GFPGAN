@@ -3,7 +3,7 @@ import cv2, os, audio
 import subprocess
 import torch, face_detection
 from models import Wav2Lip
-
+from tqdm import tqdm
 
 
 class Inference:
@@ -217,7 +217,7 @@ class Inference:
         gen = self.datagen(full_frames.copy(), mel_chunks)
 
         for i, (img_batch, mel_batch, frames, coords) in enumerate(
-                gen, total=int(np.ceil(float(len(mel_chunks)) / batch_size))):
+                tqdm(gen, total=int(np.ceil(float(len(mel_chunks)) / batch_size)))):
             if i == 0:
                 frame_h, frame_w = full_frames[0].shape[:-1]
                 out = cv2.VideoWriter('temp/result.avi', cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_w, frame_h))
