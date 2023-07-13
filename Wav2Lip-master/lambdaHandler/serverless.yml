@@ -32,7 +32,6 @@ functions:
           bucket: dev.susio.videogeneration
           event: s3:ObjectCreated:*
           rules:
-            - prefix: audio/
             - suffix: .wav
           existing: true
     layers:

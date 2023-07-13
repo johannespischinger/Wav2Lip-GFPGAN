@@ -1,11 +1,9 @@
 import numpy as np
-import scipy, cv2, os, sys, audio
-import json, subprocess, random, string
-from tqdm import tqdm
+import cv2, os, audio
+import subprocess
 import torch, face_detection
 from models import Wav2Lip
-import platform
-import boto3
+
 
 
 class Inference:
@@ -47,7 +45,7 @@ class Inference:
         while 1:
             predictions = []
             try:
-                for i in tqdm(range(0, len(images), batch_size)):
+                for i in range(0, len(images), batch_size):
                     predictions.extend(detector.get_detections_for_batch(np.array(images[i:i + batch_size])))
             except RuntimeError:
                 if batch_size == 1:
@@ -219,10 +217,8 @@ class Inference:
         gen = self.datagen(full_frames.copy(), mel_chunks)
 
         for i, (img_batch, mel_batch, frames, coords) in enumerate(
-                tqdm(gen, total=int(np.ceil(float(len(mel_chunks)) / batch_size)))):
+                gen, total=int(np.ceil(float(len(mel_chunks)) / batch_size))):
             if i == 0:
-
-
                 frame_h, frame_w = full_frames[0].shape[:-1]
                 out = cv2.VideoWriter('temp/result.avi', cv2.VideoWriter_fourcc(*'DIVX'), fps, (frame_w, frame_h))
 
@@ -245,8 +241,5 @@ class Inference:
         print(self.outputFile)
         cmd = f"ffmpeg -nostats -y -i 'temp/result.avi' -i {self.audio} -c:v copy -c:a aac {self.outputFile}"
         subprocess.run(cmd, shell=True)
-
-        # command = 'ffmpeg -hide_banner -y -i {} -i {} -strict -2 -q:v 1 {}'.format(self.audio, 'temp/result.avi', self.outputFile)
-        # subprocess.call(command, shell=platform.system() != 'Windows')
 
         return self.outputFile
