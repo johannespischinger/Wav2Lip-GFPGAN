@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 class Inference:
     def __init__(self, video, audio, outputFile, checkpoint_path='checkpoints/wav2lip.pth', static=False, fps=25.,
-                 pads=[0, 10, 0, 0], face_det_batch_size=4, wav2lip_batch_size=4, resize_factor=1,
+                 pads=[0, 10, 0, 0], face_det_batch_size=8, wav2lip_batch_size=8, resize_factor=1,
                  crop=[0, -1, 0, -1], box=[-1, -1, -1, -1], rotate=False, nosmooth=False):
         self.video = video
         self.audio = audio

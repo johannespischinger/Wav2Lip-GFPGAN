@@ -1,3 +1,4 @@
+from pydantic import BaseModel
 import os
 from http.client import HTTPException
 
@@ -10,6 +11,7 @@ from starlette.status import HTTP_403_FORBIDDEN
 from inference import Inference
 from ganInference import GanInference
 import boto3
+
 
 app = FastAPI()
 
@@ -28,53 +30,83 @@ async def verify_api_key(api_key: str = Depends(API_KEY_LOCATION)):
         raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Invalid API key")
     return api_key
 
+
+class VideoInference(BaseModel):
+    awsURL: str
+    audioID: str
+
+
 @app.get("/")
 async def root():
     return {"message": "Hello sweetheart, lets upload some files to the API"}
 
 
 @app.post("/inference", dependencies=[Depends(verify_api_key)])
-async def inference(audio: UploadFile = File(...), video: UploadFile = File(...), video_name: str = Form(...)):
-    # Save the video file
-    video_filename = f"inputs/{video.filename}"
-    with open(video_filename, "wb") as f:
-        f.write(await video.read())
+async def inference(event: dict):
 
-    # Save the audio file
-    audio_filename = f"inputs/{audio.filename}"
-    with open(audio_filename, "wb") as f:
-        f.write(await audio.read())
+    await run_inference(event)
 
-    # Set the default output file name if video_name is not provided
-    if video_name:
-        output_file_name = video_name
-    else:
-        output_file_name = "output"
+    return {
+        "message": "Inference triggered successfully",
+    }
+
+
+async def run_inference(event):
+
+    # Init the S3 client
+    s3_client = boto3.client('s3')
+
+    # Get the bucket name and other file information
+    for record in event['Records']:
+        bucket = record['s3']['bucket']['name']
+        key = record['s3']['object']['key']
+        key_list = key.split("/")
+
+    # key_list:
+    # [0] - userID
+    # [1] - speakerID
+    # [2] - campaignID
+    # [3] - raw-folder
+    # [4] - filename
+
+    videoFile = f'inputs/input_video.mp4'
+    audioFile = f'inputs/{key_list[4]}'
+
+    # Download the audio file
+    s3_client.download_file(bucket, key, f'inputs/{key_list[4]}')
+
+    s3_client.download_file(bucket, f'{key_list[0]}/{key_list[1]}/{key_list[2]}/raw/input_video.mp4',videoFile)
+
+    # Define the output file name
+    name = key_list[4].replace(".wav", ".mp4")
+    video_name = f"{key_list[0]}-{key_list[1]}-{key_list[2]}-{name}"
 
     # Set the output file path
-    output_file_path = f"results/{output_file_name}"
+    output_file_path = f"results/{video_name}"
 
     # Run inference and GAN
-    inference = Inference(video=video_filename, audio=audio_filename, outputFile=output_file_path)
+    inference = Inference(video=videoFile, audio=audioFile, outputFile=output_file_path)
     output_file_path = inference.run()
-    gan = GanInference(videoPath=output_file_path, audioPath=audio_filename)
+    gan = GanInference(videoPath=output_file_path, audioPath=audioFile)
     gan.run()
 
     # Defining the s3 upload with bucket name and file name
     s3_bucket_name = "dev.susio.videogeneration"
     s3_key = f"cache/{video_name}"
     s3_client = boto3.client("s3")
-    s3_client.upload_file(output_file_path, s3_bucket_name, s3_key)
+    # s3_client.upload_file(output_file_path, s3_bucket_name, s3_key)
+
+    model = VideoInference(
+        awsURL=f"https://{s3_bucket_name}/{s3_key}",
+        audioID=f"{key_list[4]}"
+    )
 
     # Generate the S3 URL for the uploaded video
-    video_url = f"https://{s3_bucket_name}.s3.amazonaws.com/{s3_key}"
 
     # Delete the local files
-    os.remove(video_filename)
-    os.remove(audio_filename)
-    os.remove(output_file_path)
+    os.remove(videoFile)
+    os.remove(audioFile)
+    # os.remove(output_file_path)
+    print("Test")
 
-    return {
-        "message": "File uploaded successfully",
-        "video_url": video_url
-    }
+    return model
