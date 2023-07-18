@@ -94,7 +94,7 @@ async def run_inference(event):
     s3_bucket_name = "dev.susio.videogeneration"
     s3_key = f"cache/{video_name}"
     s3_client = boto3.client("s3")
-    # s3_client.upload_file(output_file_path, s3_bucket_name, s3_key)
+    s3_client.upload_file(output_file_path, s3_bucket_name, s3_key)
 
     model = VideoInference(
         awsURL=f"https://{s3_bucket_name}/{s3_key}",
@@ -106,7 +106,6 @@ async def run_inference(event):
     # Delete the local files
     os.remove(videoFile)
     os.remove(audioFile)
-    # os.remove(output_file_path)
-    print("Test")
+    os.remove(output_file_path)
 
     return model
