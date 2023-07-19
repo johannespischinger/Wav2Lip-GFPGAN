@@ -42,16 +42,16 @@ async def root():
 
 
 @app.post("/inference", dependencies=[Depends(verify_api_key)])
-async def inference(event: dict):
+def inference(event: dict):
 
-    await run_inference(event)
+    run_inference(event)
 
     return {
         "message": "Inference triggered successfully",
     }
 
 
-async def run_inference(event):
+def run_inference(event):
 
     # Init the S3 client
     s3_client = boto3.client('s3')
