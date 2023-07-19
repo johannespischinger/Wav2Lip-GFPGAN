@@ -43,16 +43,14 @@ async def root():
 
 
 @app.post("/inference", dependencies=[Depends(verify_api_key)])
-def inference(event: dict):
-
+async def inference(event: dict):
     asyncio.create_task(run_inference(event))
-
     return {
-        "message": "Inference triggered successfully",
+        "message": f"Inference triggered for {event['Records']['s3']['object']['key']} successfully",
     }
 
 
-def run_inference(event):
+async def run_inference(event):
 
     # Init the S3 client
     s3_client = boto3.client('s3')
