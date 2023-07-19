@@ -44,9 +44,12 @@ async def root():
 
 @app.post("/inference", dependencies=[Depends(verify_api_key)])
 async def inference(event: dict):
+    for record in event['Records']:
+        key = record['s3']['object']['key']
+
     asyncio.create_task(run_inference(event))
     return {
-        "message": f"Inference triggered for {event['Records']['s3']['object']['key']} successfully",
+        "message": f"Inference triggered for {key} successfully",
     }
 
 
