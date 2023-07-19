@@ -3,7 +3,7 @@ import os
 from http.client import HTTPException
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile, Form, Depends
+from fastapi import FastAPI, Depends
 from fastapi.security import APIKeyHeader
 
 from starlette.status import HTTP_403_FORBIDDEN
@@ -11,6 +11,7 @@ from starlette.status import HTTP_403_FORBIDDEN
 from inference import Inference
 from ganInference import GanInference
 import boto3
+import asyncio
 
 
 app = FastAPI()
@@ -44,7 +45,7 @@ async def root():
 @app.post("/inference", dependencies=[Depends(verify_api_key)])
 def inference(event: dict):
 
-    run_inference(event)
+    asyncio.create_task(run_inference(event))
 
     return {
         "message": "Inference triggered successfully",
