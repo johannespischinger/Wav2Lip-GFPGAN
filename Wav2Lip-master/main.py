@@ -1,3 +1,5 @@
+import time
+
 from pydantic import BaseModel
 import os
 from http.client import HTTPException
@@ -54,7 +56,6 @@ async def inference(event: dict):
 
 
 async def run_inference(event):
-
     # Init the S3 client
     s3_client = boto3.client('s3')
 
@@ -71,43 +72,47 @@ async def run_inference(event):
     # [3] - raw-folder
     # [4] - filename
 
+    # Define the file names
     videoFile = f'inputs/input_video.mp4'
     audioFile = f'inputs/{key_list[4]}'
-
-    # Download the audio file
-    s3_client.download_file(bucket, key, f'inputs/{key_list[4]}')
-
-    s3_client.download_file(bucket, f'{key_list[0]}/{key_list[1]}/{key_list[2]}/raw/input_video.mp4',videoFile)
-
-    # Define the output file name
     name = key_list[4].replace(".wav", ".mp4")
     video_name = f"{key_list[0]}-{key_list[1]}-{key_list[2]}-{name}"
-
-    # Set the output file path
     output_file_path = f"results/{video_name}"
 
-    # Run inference and GAN
-    inference = Inference(video=videoFile, audio=audioFile, outputFile=output_file_path)
-    output_file_path = inference.run()
-    gan = GanInference(videoPath=output_file_path, audioPath=audioFile)
-    gan.run()
+    if os.path.isfile(output_file_path) == False:
+        # Download the input video and wavFile from S3 bucket
+        s3_client.download_file(bucket, key, f'inputs/{key_list[4]}')
+        s3_client.download_file(bucket, f'{key_list[0]}/{key_list[1]}/{key_list[2]}/raw/input_video.mp4',videoFile)
 
-    # Defining the s3 upload with bucket name and file name
-    s3_bucket_name = "dev.susio.videogeneration"
-    s3_key = f"cache/{video_name}"
-    s3_client = boto3.client("s3")
-    s3_client.upload_file(output_file_path, s3_bucket_name, s3_key)
+        # Run inference and GAN
+        inference = Inference(video=videoFile, audio=audioFile, outputFile=output_file_path)
+        output_file_path = inference.run()
+        gan = GanInference(videoPath=output_file_path, audioPath=audioFile)
+        gan.run()
 
-    model = VideoInference(
-        awsURL=f"https://{s3_bucket_name}/{s3_key}",
-        audioID=f"{key_list[4]}"
-    )
+        # Defining the s3 upload with bucket name and file name
+        s3_bucket_name = "dev.susio.videogeneration"
+        s3_key = f"cache/{video_name}"
+        s3_client = boto3.client("s3")
+        s3_client.upload_file(output_file_path, s3_bucket_name, s3_key)
+        model = VideoInference(
+            awsURL=f"https://{s3_bucket_name}/{s3_key}",
+            audioID=f"{key_list[4]}"
+        )
+        os.remove(videoFile)
+        os.remove(audioFile)
+        return model
+
+    else:
+        print("File already exists")
+        return "File already exists"
+
+
 
     # Generate the S3 URL for the uploaded video
 
-    # Delete the local files
-    os.remove(videoFile)
-    os.remove(audioFile)
-    os.remove(output_file_path)
+    # Delete the local files #TODO: Uncomment this in order to delete the files
 
-    return model
+    # os.remove(output_file_path)
+
+
