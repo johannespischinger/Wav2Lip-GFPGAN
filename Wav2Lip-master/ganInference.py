@@ -9,6 +9,7 @@ from tqdm import tqdm
 from gfpgan import GFPGANer
 from basicsr.archs.rrdbnet_arch import RRDBNet
 from realesrgan import RealESRGANer
+import ffmpeg
 
 
 class GanInference:
